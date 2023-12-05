@@ -3,9 +3,12 @@ title: "Assignment 5"
 author: "Yesdi Christian Calvin, Aulia Dini"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
+  word_document: default
   html_document: default
+  pdf_document: default
 ---
+
+This is the Github link of the project : https://github.com/aulia0716/Yesdi-Aulia-A5
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -58,18 +61,9 @@ il_map <- map_data("county", region = "illinois")
 head(il_map)
 ```
 
-```{r}
-#save the acs_il_c and il_map
-#write.csv(acs_il_c, file = "C:/Users/ASUS/Dropbox (University of Michigan)/Aulia Dini Rafsanjani’s files/SURVMETH727/Assignment-5/acs_il_c.csv")
-#write.csv(il_map, file = "C:/Users/ASUS/Dropbox (University of Michigan)/Aulia Dini Rafsanjani’s files/SURVMETH727/Assignment-5/il_map.csv")
-
-#read the .csv file from directory
-acs_il_c <- read.csv("C:/Users/ASUS/Dropbox (University of Michigan)/Aulia Dini Rafsanjani’s files/SURVMETH727/Assignment-5/acs_il_c.csv")
-il_map <- read.csv("C:/Users/ASUS/Dropbox (University of Michigan)/Aulia Dini Rafsanjani’s files/SURVMETH727/Assignment-5/il_map.csv")
-```
 
 
-Join the ACS data with the map data. Not that `il_map` has a column
+Join the ACS data with the map data. Note that `il_map` has a column
 `subregion` which includes county names. We need a corresponding
 variable in the ACS data to join both data sets. This needs some
 transformations, among which the function `tolower()` might be useful.
@@ -96,6 +90,7 @@ il_map$subregion <- tolower(il_map$subregion)
 # Assume 'county' is the column in your ACS data containing county names. Make it lower case.
 acs_il_c$county <- tolower(acs_il_c$county)
 
+# After checking the names of counties in the two datasets manually, we found the four counties below whose names are different between these two datasets. Therefore, we modify the names to make them identical and match between the two datasets.
 
 acs_il_c <- acs_il_c %>%
   mutate(
@@ -112,12 +107,11 @@ acs_il_c <- acs_il_c %>%
 
 
 ```{r}
-# Now, we can join the two datasets. We'll use left_join from dplyr here, but feel free to use other join functions that suit your needs.
-library(dplyr)  # Make sure dplyr is installed and loaded.
+# We join the two datasets using left_join
+library(dplyr)
 
 acs_map <- left_join(acs_il_c, il_map, by = c("county" = "subregion"))  
 
-#In the code above, replace 'county' with the actual column in acs_il_c that corresponds to the county name. The final dataset acs_map should contain all your ACS data joined with the mapping data for each county.
 ```
 
 
@@ -135,32 +129,28 @@ ggplot(acs_map) +
 
 ## Hierarchical Clustering
 
-We want to find clusters of counties that are similar in their
-population, average household income and per capita income. First, clean
-the data so that you have the appropriate variables to use for
-clustering. Next, create the distance matrix of the cleaned data. This
-distance matrix can be used to cluster counties, e.g. using the ward
-method.
+We want to find clusters of counties that are similar in their population, average household income and per capita income. First, clean the data so that you have the appropriate variables to use for clustering. Next, create the distance matrix of the cleaned data. This distance matrix can be used to cluster counties, e.g. using the ward method.
 
 ```{r}
 #STEPS
 #1. clean the data so that we have the appropriate variables to use for clustering
-#2. create the distance matrix of the cleaned data. This distance matrix can be used to cluster counties, e.g. using the ward method.
+#2. create the distance matrix of the cleaned data. This distance matrix can be used to cluster counties.
 
 
 #1
-# Load necessary libraries
 library(cluster)
 
 # Filter and clean dataset
 cluster_df <- acs_map %>%
               select(county, pop, hh_income, income) %>%
               na.omit() %>%
-              mutate(across(c(pop, hh_income, income), as.numeric))  # Convert all columns to numeric type
+              # Convert all columns to numeric type
+              mutate(across(c(pop, hh_income, income), as.numeric)) 
 
 # Scale the variables
 cluster_df_scaled <- cluster_df
-cluster_df_scaled[,-1] <- scale(cluster_df_scaled[,-1])  # Scale all columns except the first one (County Names)
+# Scale all columns except the first one (County Names)
+cluster_df_scaled[,-1] <- scale(cluster_df_scaled[,-1])  
 
 
 #2
@@ -182,39 +172,44 @@ Plot the dendrogram to find a reasonable number of clusters. Draw boxes
 around the clusters of your cluster solution.
 
 ```{r}
-# create dendogram
+# Create dendogram
 plot(hc, main = "Ward", xlab = "", sub = "")
 
-# draw boxes around cluster solution
+# Draw boxes around the cluster solution. Based on our observation from the dendrogram, we inspect that the number of clusters is 6, so we use it as the k value in this case.
+
 rect.hclust(hc, 
-            k = 3, 
+            k = 6, 
             border = "red")
 ```
 
-Visualize the county clusters on a map. For this task, create a new
-`acs_map` object that now also includes cluster membership as a new
-column. This column should be called `cluster`.
+Visualize the county clusters on a map. For this task, create a new `acs_map` object that now also includes cluster membership as a new column. This column should be called `cluster`.
 
-```{r}
-# Add the cluster assignment back into the mapping data
-#acs_map <- left_join(acs_map, cluster_df[,c("county", "cluster")], by = c("county" = "subregion"))
+```{r, warning=FALSE}
+# Cut the dendrogram at a specific height to determine the number of clusters
+cut_height <- 17.5  # We adjust this based on our visual inspection of the dendrogram
+cluster_memberships <- cutree(hc, h = cut_height)
 
-# Change cluster variable to factor
-#acs_map$cluster <- as.factor(acs_map$cluster)
+# Add cluster membership to the acs_map dataset
+acs_map_with_clusters <- acs_map %>%
+  mutate(cluster = as.factor(cluster_memberships))
 
-## Map with color indicating cluster
-#map <- ggplot() +
-#  geom_polygon(data = acs_map, aes(x = long, y = lat, group = group, fill = cluster), color = "white", size = 0.2) +
-#  coord_map() +
-#  scale_fill_discrete(name = "Cluster Number") +
-#  theme_minimal() +
-#  labs(title = "Clustered Counties in Illinois",
-#       #x = "Longitude",
-#      y = "Latitude")
+# Print the first few rows of the new acs_map object to verify the addition of the 'cluster' column
+head(acs_map_with_clusters)
 
-#print(map)
+# Map with color indicating cluster
+map_with_clusters <- ggplot() +
+  geom_polygon(data = acs_map_with_clusters, aes(x = long, y = lat, group = group, fill = cluster), color = "blue", size = 0.2) +
+  coord_map() +
+  scale_fill_discrete(name = "Cluster Number") +
+  theme_minimal() +
+  labs(title = "Clustered Counties in Illinois",
+       x = "Longitude",
+       y = "Latitude")
+
+# Print the map
+print(map_with_clusters)
+
 ```
-
 
 ## Census Tracts
 
@@ -251,51 +246,41 @@ cluster_ct <- acs_il_t %>%
 head(cluster_ct)
 ```
 
-
-Since we want to use K Means in this section, we start by determining
-the optimal number of K that results in Clusters with low within but
-high between variation. Plot within cluster sums of squares for a range
-of K (e.g. up to 20).
-
 ```{r}
-library(factoextra)
-library(cluster)
-
-# Select and convert the columns to numeric
-data_for_clustering <- cluster_ct %>% 
-  select(pop, hh_income, income) %>% 
-  mutate(across(everything(), as.numeric))
-
-# Handle NA values, if any:
-data_for_clustering <- na.omit(data_for_clustering)
-
-# Then, scale your data:
-data <- scale(data_for_clustering)
-
-# Compute and plot wss for k = 2 to k = 20
-k.max <- 20
-wss <- sapply(1:k.max, 
-              function(k){kmeans(data, k, nstart=50,iter.max = 15)$tot.withinss})
-
-plot(1:k.max, wss,
-     type="b", pch = 19, frame = FALSE, 
-     xlab="Number of clusters K",
-     ylab="Total within-clusters sum of squares")
+# subset the data
+c_data2 <-
+  cluster_ct %>%
+   select(county, pop, hh_income, income) %>%
+  mutate(pop = as.numeric(pop), 
+         hh_income = as.numeric(hh_income),
+         income = as.numeric(income)) %>%
+  na.omit()
 ```
+
+Since we want to use K Means in this section, we start by determining the optimal number of K that results in Clusters with low within but high between variation. Plot within cluster sums of squares for a range of K (e.g. up to 20).
+
+```{r, warning=FALSE}
+# check the optimum cluster
+fviz_nbclust(c_data2, #data set we want to use
+             kmeans, #cluster method
+             method = "wss", #method used for estimating the optimal number of clusters
+             k.max = 20)
+```
+
 
 
 Run `kmeans()` for the optimal number of clusters based on the plot
 above.
 
 ```{r}
-# the optimal number of clusters is 3 since it is the elbow of the graph
-optimal_k <- 3
+# we inspect that the optimal number of clusters is 6 since it is the elbow of the graph
+optimal_k <- 6
 
 # Run k-means clustering 
 set.seed(123) # For reproducibility
-kmeans_result <- kmeans(data, centers = optimal_k, nstart = 50)
+km_12 <- kmeans(c_data2, centers = optimal_k, nstart = 50)
 
-print(kmeans_result)
+print(km_12)
 ```
 
 
@@ -305,10 +290,10 @@ observed within each cluster.
 
 ```{r}
 
-cluster_ct$cluster <- kmeans_result$cluster
+c_data2$cluster <- km_12$cluster
 
 
-cluster_summary <- cluster_ct %>%
+cluster_summary <- c_data2 %>%
   group_by(cluster) %>%
   summarise(
     mean_pop = mean(pop, na.rm = TRUE),
@@ -328,14 +313,12 @@ when calling the function.
 
 ```{r}
 # define function
-kmeans_custom <- function(k, data = cluster_ct) {
+kmeans_custom <- function(k, data = c_data2) {
   set.seed(123)
-  result_cluster <- kmeans(cluster_ct, centers = k, nstart = 50)
+  result_cluster <- kmeans(c_data2, centers = k, nstart = 50)
   return(result_cluster)
 }
 
-# run function with K=3
-# result_cluster <- kmeans_custom(3)
 ```
 
 
@@ -347,7 +330,7 @@ family or `for` loops.
 
 ```{r}
 # Make a copy of your data to avoid changing the original
-acs_il_t_clustered <- cluster_ct
+acs_il_t_clustered <- c_data2
 
 # Iteratively perform k-means clustering for K = 2 to 10
 for (k in 2:10) {
